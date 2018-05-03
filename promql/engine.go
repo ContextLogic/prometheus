@@ -505,6 +505,9 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		return nil, err
 	}
 
+	// Create a separate error variable for errors while populating iterators
+	// this is necessary to bubble up errors from the underlying storage
+	var inspectError error
 	Inspect(s.Expr, func(node Node, path []Node) bool {
 		var set storage.SeriesSet
 		params := &storage.SelectParams{
@@ -517,11 +520,13 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 
 			set, err = querier.Select(params, n.LabelMatchers...)
 			if err != nil {
+				inspectError = err
 				level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
 				return false
 			}
 			n.series, err = expandSeriesSet(set)
 			if err != nil {
+				inspectError = err
 				// TODO(fabxc): use multi-error.
 				level.Error(ng.logger).Log("msg", "error expanding series set", "err", err)
 				return false
@@ -536,11 +541,13 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 
 			set, err = querier.Select(params, n.LabelMatchers...)
 			if err != nil {
+				inspectError = err
 				level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
 				return false
 			}
 			n.series, err = expandSeriesSet(set)
 			if err != nil {
+				inspectError = err
 				level.Error(ng.logger).Log("msg", "error expanding series set", "err", err)
 				return false
 			}
@@ -551,7 +558,7 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		}
 		return true
 	})
-	return querier, err
+	return querier, inspectError
 }
 
 // extractFuncFromPath walks up the path and searches for the first instance of
